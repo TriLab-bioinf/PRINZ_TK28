@@ -1,0 +1,28 @@
+# To load conda environment and install required tools
+mamba env create -f=environment_bbtools.yml -n rnaseq
+conda activate rnaseq
+module load trimgalore
+
+# Run entire pipeline
+snakemake --profile slurm
+
+# Run specific rule
+## First try a dry run
+snakemake -R --until $MY_RULE --cores $CPUs -n
+## Then do the actual run
+snakemake -R --until $MY_RULE --cores $CPUs
+
+# Check workflow progress when connected remotely with screen and terminal called workflow
+screen -r workflow
+
+
+
+
+seqtk seq -A SB-7773_1_S1.merged.fastq > SB-7773_1_S1.merged.fasta
+
+
+makeblastdb -dbtype nucl -in SB-7773_1_S1.merged.fasta
+
+
+blastn -query vector_seq.fasta -db SB-7773_1_S1.merged.fasta -evalue 1e-10 -dust no -outfmt '7 qaccver saccver pident length mismatch gapopen qstart qend sstart send evalue bitscore qlen slen' -out SB-7773_1_S1.merged.bn
+

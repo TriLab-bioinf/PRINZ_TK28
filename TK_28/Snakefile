@@ -1,0 +1,98 @@
+# vim: set ft=python:
+
+# Illumina read processing workflow v1.0
+# Hernan Lorenzi
+# hernan.lorenzi@nih.gov
+# it is necessary to configure the config.yml file accordingly to include all metadatata required.
+
+import os
+import glob
+
+configfile: "config/config.yml"
+samples = config["samples"].keys()
+genome = config["reference"]["genome_file"]
+annotation = config["reference"]["ensembl_gtf"]
+starOverhang = config["star_db"]["sjdbOverhang"]
+adapters = config["adapters_file"]
+
+# Functions
+def get_fq1(wildcards):
+            return [ my_files for my_files in glob.glob(f"data/00reads/{wildcards.sample}*_R1*.fastq.gz")]
+
+def get_fq2(wildcards):
+            b = [ my_files for my_files in glob.glob(f"data/00reads/{wildcards.sample}*_R1*.fastq.gz")]
+            c = list(map(lambda x: str.replace(x, "_R1", "_R2"), b))
+            return c
+
+# Set what rules to run locally
+localrules: all #,
+            #build_abundant_db
+
+rule all:
+    # IMPORTANT: output file fo all rule has to match the name specified in the output file
+    # and not include suffixes that the command use might add to it.
+    input:  o7 = "results/07multiqc/multiqc_done.flag"
+
+rule trimming:
+    input:  fq1 = "data/00reads/{sample}" + "_L001_R1_001.fastq.gz",
+            fq2 = "data/00reads/{sample}" + "_L001_R2_001.fastq.gz"
+    output: trim1p = "results/01trim/{sample}/{sample}_L001_R1_001_val_1.fq.gz",
+            trim2p = "results/01trim/{sample}/{sample}_L001_R2_001_val_2.fq.gz",
+            outdir = directory("results/01trim/{sample}")
+    params: " --paired --retain_unpaired "
+    resources:
+        cpus_per_task = 16,
+        partition = "quick",
+        time = "4:00:00"
+    threads: 16
+    log:    log1 = "results/01trim/{sample}.log",
+            log2 = "results/01trim/{sample}.stats.log"
+    benchmark:
+            "benchmarks/trim/{sample}.tsv"
+    shell:
+        """
+        trim_galore -cores {threads} --length 100 --gzip -o {output.outdir} {params} {input.fq1} {input.fq2}
+        """
+
+rule fastqc:
+    input: raw1 = "data/00reads/{sample}_L001_R1_001.fastq.gz",
+           raw2 = "data/00reads/{sample}_L001_R2_001.fastq.gz", 
+           trim1p = "results/01trim/{sample}/{sample}_L001_R1_001_val_1.fq.gz",
+           trim2p = "results/01trim/{sample}/{sample}_L001_R2_001_val_2.fq.gz"
+    output: o3 = directory("results/06fastqc_raw/{sample}"),
+            o5 = directory("results/06fastqc_trim/{sample}")
+    threads: 8
+    resources:
+        cpus_per_task = 8,
+        partition = "quick",
+        time = "4:00:00",
+        mem_mb = 4000
+    params:
+        "--quiet"
+    shell:
+        """
+        mkdir -p {output.o3}
+        mkdir -p {output.o5}
+        fastqc {params} -t {threads} -o {output.o3} {input.raw1} {input.raw2}
+        fastqc {params} -t {threads} -o {output.o5} {input.trim1p} {input.trim2p}
+        """
+
+absolute_path = "/home/lorenziha/Downloads/snakemake-class/workflow/"
+
+rule multiqc:
+    input: i1 = expand("results/01trim/{s}", s=samples),
+           i7 = expand("results/06fastqc_raw/{s}", s=samples),
+           i8 = expand("results/06fastqc_trim/{s}", s=samples)
+    output: "results/07multiqc/multiqc_done.flag"
+    resources:
+        partition = "quick",
+        time = "4:00:00",
+        mem_mb = 4000                    
+    shell:
+        """
+        multiqc -f -d -o results/07multiqc {input.i1} \
+                {input.i7} \
+                {input.i8}
+        touch {output}
+        """
+

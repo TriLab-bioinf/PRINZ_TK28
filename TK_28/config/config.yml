@@ -1,0 +1,17 @@
+# Metadata
+adapters_file: None
+reference:  
+    abundant_rna_file: None
+    ensembl_ver: None
+    ensembl_gtf: None 
+    genome_build: None
+    genome_file: None
+    star_index: None
+    genome_source: None
+star_db:
+    sjdbOverhang: None
+samples:
+    SB-7773_1_S1:
+    SB-7773_3_S3:
+    SB-7773_2_S2:
+    SB-7773_4_S4:
